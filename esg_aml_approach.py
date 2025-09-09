@@ -38,7 +38,7 @@ def combine_files_in_directory(directory_path):
     return combined_df
 
 # Readin and combine :
-directory_path = 'C:/Users/CCnossen/Desktop/Open data/World_commodities/'
+directory_path = #https://www.usgs.gov/centers/national-minerals-information-center/commodity-statistics-and-information
 combined_df = combine_files_in_directory(directory_path)
 
 
@@ -84,7 +84,7 @@ del df_vals
 #------------------------------------------------------------------------------
 # readin agricultural data from UN FAO
 #------------------------------------------------------------------------------
-fao_agri = pd.read_csv('C:/Users/CCnossen/Desktop/Open data/FAOSTAT_data_en_1-17-2025.csv') #https://www.fao.org/faostat/en/#data/QV
+fao_agri = pd.read_csv('') #https://www.fao.org/faostat/en/#data/QV
 
 # cleanup
 
@@ -93,10 +93,12 @@ fao_agri = pd.read_csv('C:/Users/CCnossen/Desktop/Open data/FAOSTAT_data_en_1-17
 #------------------------------------------------------------------------------
 
 # TPI - corruption perception index
-tpi = pd.read_excel('C:/Users/CCnossen/Desktop/Open data/CPI2023_Global_Results__Trends.xlsx', sheet_name='CPI 2023')
+tpi = pd.read_excel('https://images.transparencycdn.org/images/CPI2024-Results-and-trends.xlsx', sheet_name='CPI 2024') #https://images.transparencycdn.org/images/CPI2024-Results-and-trends.xlsx
 tpi.columns = tpi.iloc[2] # use row 3 for colnames
 tpi = tpi.iloc[3:] # drop first 3 rows
-tpi['CPI score 2023'] = pd.to_numeric(tpi['CPI score 2023'])
+tpi['CPI score 2024'] = pd.to_numeric(tpi['CPI score 2024'])
+tpi = tpi.rename(columns={'ISO3': 'Iso3'})
+
 
 #------------------------------------------------------------------------------
 # readin ILO data
@@ -104,7 +106,7 @@ tpi['CPI score 2023'] = pd.to_numeric(tpi['CPI score 2023'])
 
 # ILO - child labour statistics
 #'SDG indicator 8.7.1 - Proportion of children engaged in economic activity (%)'
-ilo = pd.read_excel('C:/Users/CCnossen/Desktop/Open data/SDG indicator 8.7.1 - Proportion of children engaged in economic activity (%).xlsx', sheet_name='Sheet1')
+ilo = pd.read_excel('https://rplumber.ilo.org/data/indicator/?id=SDG_B871_SEX_AGE_RT_A&lang=en&type=label&format=.xlsx&channel=ilostat&title=sdg-indicator-871-proportion-of-children-engaged-in-economic-activity-and-household-chores-annual', sheet_name='Sheet1')
 ilo_subset = ilo[ilo['sex.label'] == 'Sex: Total']
 ilo_subset = ilo_subset[ilo_subset['classif1.label'] == "Age (Child labour bands): '5-17"]
 ilo_subset = ilo_subset.sort_values(by=['ref_area.label'] + ['time'], ascending=[True] * len(['ref_area.label']) + [False])
@@ -115,11 +117,17 @@ ilo_childlabour = ilo_subset
 del ilo, ilo_subset
 
 #------------------------------------------------------------------------------
+# readin Modern Slavery data
+#------------------------------------------------------------------------------
+
+gsi = pd.read_excel('', sheet_name='GSI 2023 summary data', header=2) # https://cdn.walkfree.org/ephemeral/2023-Global-Slavery-Index-Data-b9898271-304f-42ac-921d-e044ad92e0ca.zip
+
+#------------------------------------------------------------------------------
 # readin Tree coverage data
 #------------------------------------------------------------------------------
 
 # UN FAO - tree coverage
-un_fao = pd.read_csv('C:/Users/CCnossen/Desktop/Open data/FAOSTAT_data_en_7-23-2024.csv')
+un_fao = pd.read_csv('') #https://www.fao.org/statistics/highlights-archive/highlights-detail/agricultural-production-statistics-2010-2023/en
 un_fao_subset = un_fao[un_fao['Element'] == 'Area from CCI_LC'] # keep only the dataset consistent since 1992
 
 # sum the mangroves + tree coverage
@@ -145,6 +153,11 @@ un_fao_merged['abs_diff'] = (un_fao_merged['max_year_val'] -  un_fao_merged['min
 
 fao_tree = un_fao_merged
 
+#remove explicit duplications based on aged naming
+fao_tree = fao_tree[fao_tree['Area'] != 'Sudan (former)']
+fao_tree = fao_tree[fao_tree['Area'] != 'China, mainland']
+fao_tree = fao_tree[fao_tree['Area'] != 'Ethiopia PDR']
+
 # cleanup
 del un_fao_subset, un_fao_subset_grouped, un_fao_subset_minmax, merged, un_fao_min, un_fao_max, un_fao_merged, un_fao
 
@@ -153,7 +166,7 @@ del un_fao_subset, un_fao_subset_grouped, un_fao_subset_minmax, merged, un_fao_m
 #------------------------------------------------------------------------------
 
 # get reference list of country ISO codes
-c_iso = pd.read_excel('C:/Users/CCnossen/Desktop/Open data/ISO Country list.xlsx', sheet_name='Sheet1')
+c_iso = pd.read_excel('/inputdata/ISO Country list.xlsx', sheet_name='Sheet1')
 
 #------------------------------------------------------------------------------
 # combine datasets
@@ -242,7 +255,7 @@ commodity_data['Country'] = commodity_data['Country'].apply(remove_nonalfanumeri
 c_iso['Country'] = c_iso['Country'].apply(remove_nonalfanumerics)
 temp = pd.merge(commodity_data, c_iso, left_on = ['Country'], right_on = ['Country'], how = 'left')
 
-# Find rows in df2 where 'Item' partially matches any string in df1['Strings']
+# Find rows in df2 where 'country' partially matches any string in df1['country']
 temp2 = temp[temp['Iso2'].isnull()]
 result = find_partial_string_in_dataframe(c_iso, temp2, 'Country', 'Country')
 result = result.drop(['Iso2', 'Iso3','Numeric'], axis = 1)
@@ -265,11 +278,12 @@ commodity_data_country['Type_refined'] = commodity_data_country['Type_refined'].
 commodity_data_country['Type_refined'] = commodity_data_country['Type_refined'].str.replace('Refinery production, ','')
 commodity_data_country['Type_refined'] = commodity_data_country['Type_refined'].str.replace(', estimated, ','')
 
-
 del temp, temp2, temp3, temp4, result
 
+
+
 #------------------------------------------------------------------------------
-# combine datasets to summarized view
+# combine datasets to summarized view on country level
 #------------------------------------------------------------------------------
 
 commodities = pd.Series(commodity_data_country.Type_refined.unique())
@@ -278,8 +292,112 @@ agris = pd.Series(fao_agri.Item.unique())
 all_raw = pd.concat([commodities, agris]).to_list()
 all_raw = [x for x in all_raw if str(x) != 'nan']
 
+# stap 1 - geef alle andere tablelen ook nog een goede country ISO code toevoeging -- DONE
+# stap 2 - maak een overzicht op landniveau van de 4 input tabellen (joins)
+# stap 3 - maak een overzicht op grondstofniveau van de input tabellen (dus relatieve scoring per land) (joins)
+# stap 4 - gebruik AI om info te krijgen over welke grondstoffen er in een bepaald product gaan om resultaten uit stap 3 (en 2) bruikbaar te maken
+
+def attach_country_iso(df, country_col, c_iso):
+    """
+    Attach ISO country codes to a dataframe based on a country column.
+
+    
+    df: Input dataframe (e.g. fao_agri).
+    country_col: Column in df that contains country names (e.g. "Area").
+    c_iso: Reference dataframe with 'Country', 'Iso2', 'Iso3', 'Numeric'.
+    
+    Requires functions: remove_nonalfanumerics, find_partial_string_in_dataframe : function
+
+    Returns: DataFrame with ISO country codes merged in.
+    """
+    
+    # Standardize country columns
+    df = df.copy()
+    df['Country'] = df[country_col].apply(remove_nonalfanumerics)
+    c_iso = c_iso.copy()
+    c_iso['Country'] = c_iso['Country'].apply(remove_nonalfanumerics)
+
+    # Direct merge
+    temp = pd.merge(df, c_iso, on='Country', how='left')
+
+    # Handle rows without direct match
+    temp2 = temp[temp['Iso2'].isnull()]
+    result = find_partial_string_in_dataframe(c_iso, temp2, 'Country', 'Country')
+    result = result.drop(['Iso2', 'Iso3', 'Numeric'], axis=1)
+
+    temp3 = pd.merge(result, c_iso, left_on='Reference', right_on='Country', how='left')
+    temp3 = temp3.drop(['Reference', 'Country_y'], axis=1)
+    temp3 = temp3.rename(columns={'Country_x': 'Country'})
+
+    # Keep rows that already matched
+    temp4 = temp[temp['Iso2'].notnull()]
+
+    # Final combined dataframe
+    fao_agri_iso = pd.concat([temp4, temp3], ignore_index=True)
+    
+    del temp, temp2, temp3, temp4, result
+
+    return fao_agri_iso
+
+
+# ISO3 in ilo table
+ilo_childlabour_iso = attach_country_iso(
+    df=ilo_childlabour,
+    country_col="ref_area.label",
+    c_iso=c_iso,
+)
+
+# ISO3 in gsi table
+gsi_iso = attach_country_iso(
+    df=gsi,
+    country_col="Country",
+    c_iso=c_iso,
+)
+
+# ISO3 in fao_tree table
+fao_tree_iso = attach_country_iso(
+    df=fao_tree,
+    country_col="Area",
+    c_iso=c_iso,
+)
+
+# ISO3 in fao_agri table
+fao_agri_iso = attach_country_iso(
+    df=fao_agri,
+    country_col="Area",
+    c_iso=c_iso,
+)
+
+# create unduplicated country iso list - duplication is only on country name variations
+c_iso_unique = c_iso.drop_duplicates(subset=['Iso3'], keep='first')
+
+# merge the tables on country level
+merged = pd.merge(c_iso_unique[['Country', 'Iso3']], ilo_childlabour_iso[['obs_value', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'obs_value': 'S_childlabour_pct'})
+
+merged = pd.merge(merged, gsi_iso[['Estimated prevalence of modern slavery per 1,000 population', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged['S_modernslavery_pct'] = merged['Estimated prevalence of modern slavery per 1,000 population'] / 10
+merged = merged.drop('Estimated prevalence of modern slavery per 1,000 population', axis=1)
+
+merged = pd.merge(merged, fao_tree_iso[['pct_diff', 'abs_diff', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'pct_diff': 'E_tree_change_pct', 'abs_diff': 'E_tree_change_abs'})
+merged['E_tree_change_pct'] = merged['E_tree_change_pct'] * 100
+
+merged = pd.merge(merged, tpi[['CPI score 2024', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'CPI score 2024': 'G_cpi'})
+
+ESG_indicators = merged
+
+del merged, c_iso_unique
+del combined_df, commodity_data, fao_agri, fao_tree, fao_tree_iso, gsi, gsi_iso, ilo_childlabour, ilo_childlabour_iso, tpi
 
 
 
+#------------------------------------------------------------------------------
+# continue analyses
+#------------------------------------------------------------------------------
 
-
+#available dataframes
+# ESG_indicators = list of sourced ESG indicators per country ISO code
+# commodity_data_country = sources of each commodity, including country ISO code
+# fao_agri_iso = source of each agriculture material, including country ISO code
