@@ -123,6 +123,22 @@ del ilo, ilo_subset
 gsi = pd.read_excel('', sheet_name='GSI 2023 summary data', header=2) # https://cdn.walkfree.org/ephemeral/2023-Global-Slavery-Index-Data-b9898271-304f-42ac-921d-e044ad92e0ca.zip
 
 #------------------------------------------------------------------------------
+# readin ILO workplace fatalities
+#------------------------------------------------------------------------------
+
+# ILO - fatalities
+# https://ilostat.ilo.org/topics/safety-and-health-at-work/
+ilo = pd.read_excel('C:/Users/CCnossen/Desktop/Open data/INJ_FATL_SEX_MIG_RT_A-20250912T1131.xlsx', sheet_name='Sheet1')
+ilo_subset = ilo[ilo['sex.label'] == 'Total']
+ilo_subset = ilo_subset[ilo_subset['classif1.label'] == "Migrant status: Total"]
+ilo_subset = ilo_subset.sort_values(by=['ref_area.label'] + ['time'], ascending=[True] * len(['ref_area.label']) + [False])
+ilo_subset = ilo_subset.drop_duplicates(subset=['ref_area.label'], keep='first')
+ilo_fat = ilo_subset
+
+# cleanup
+del ilo, ilo_subset
+
+#------------------------------------------------------------------------------
 # readin Tree coverage data
 #------------------------------------------------------------------------------
 
@@ -160,6 +176,18 @@ fao_tree = fao_tree[fao_tree['Area'] != 'Ethiopia PDR']
 
 # cleanup
 del un_fao_subset, un_fao_subset_grouped, un_fao_subset_minmax, merged, un_fao_min, un_fao_max, un_fao_merged, un_fao
+
+#------------------------------------------------------------------------------
+# readin EPI H20 index data
+#------------------------------------------------------------------------------
+
+epi_h2o = pd.read_excel('') # https://epi.yale.edu/measure/2024/H2O
+
+#------------------------------------------------------------------------------
+# readin EPI Air Quality index data
+#------------------------------------------------------------------------------
+
+epi_air = pd.read_excel('') # https://epi.yale.edu/measure/2024/AIR
 
 #------------------------------------------------------------------------------
 # readin supporting data
@@ -280,8 +308,6 @@ commodity_data_country['Type_refined'] = commodity_data_country['Type_refined'].
 
 del temp, temp2, temp3, temp4, result
 
-
-
 #------------------------------------------------------------------------------
 # combine datasets to summarized view on country level
 #------------------------------------------------------------------------------
@@ -292,16 +318,10 @@ agris = pd.Series(fao_agri.Item.unique())
 all_raw = pd.concat([commodities, agris]).to_list()
 all_raw = [x for x in all_raw if str(x) != 'nan']
 
-# stap 1 - geef alle andere tablelen ook nog een goede country ISO code toevoeging -- DONE
-# stap 2 - maak een overzicht op landniveau van de 4 input tabellen (joins)
-# stap 3 - maak een overzicht op grondstofniveau van de input tabellen (dus relatieve scoring per land) (joins)
-# stap 4 - gebruik AI om info te krijgen over welke grondstoffen er in een bepaald product gaan om resultaten uit stap 3 (en 2) bruikbaar te maken
-
 def attach_country_iso(df, country_col, c_iso):
     """
     Attach ISO country codes to a dataframe based on a country column.
 
-    
     df: Input dataframe (e.g. fao_agri).
     country_col: Column in df that contains country names (e.g. "Area").
     c_iso: Reference dataframe with 'Country', 'Iso2', 'Iso3', 'Numeric'.
@@ -347,6 +367,13 @@ ilo_childlabour_iso = attach_country_iso(
     c_iso=c_iso,
 )
 
+# ISO3 in ilo fatalities table
+ilo_fat_iso = attach_country_iso(
+    df=ilo_fat,
+    country_col="ref_area.label",
+    c_iso=c_iso,
+)
+
 # ISO3 in gsi table
 gsi_iso = attach_country_iso(
     df=gsi,
@@ -368,6 +395,20 @@ fao_agri_iso = attach_country_iso(
     c_iso=c_iso,
 )
 
+# ISO3 in EPI H2o table
+epi_h2o_iso = attach_country_iso(
+    df=epi_h2o,
+    country_col="country",
+    c_iso=c_iso,
+)
+
+# ISO3 in EPI Air table
+epi_air_iso = attach_country_iso(
+    df=epi_air,
+    country_col="country",
+    c_iso=c_iso,
+)
+
 # create unduplicated country iso list - duplication is only on country name variations
 c_iso_unique = c_iso.drop_duplicates(subset=['Iso3'], keep='first')
 
@@ -379,25 +420,34 @@ merged = pd.merge(merged, gsi_iso[['Estimated prevalence of modern slavery per 1
 merged['S_modernslavery_pct'] = merged['Estimated prevalence of modern slavery per 1,000 population'] / 10
 merged = merged.drop('Estimated prevalence of modern slavery per 1,000 population', axis=1)
 
+merged = pd.merge(merged, ilo_fat_iso[['obs_value', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'obs_value': 'S_fatalities_100k'})
+
 merged = pd.merge(merged, fao_tree_iso[['pct_diff', 'abs_diff', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
 merged = merged.rename(columns={'pct_diff': 'E_tree_change_pct', 'abs_diff': 'E_tree_change_abs'})
 merged['E_tree_change_pct'] = merged['E_tree_change_pct'] * 100
 
-merged = pd.merge(merged, tpi[['CPI score 2024', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
-merged = merged.rename(columns={'CPI score 2024': 'G_cpi'})
+merged = pd.merge(merged, epi_h2o_iso[['Score', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'Score': 'E_epi_h20_pct'})
+
+merged = pd.merge(merged, epi_air_iso[['Score', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'Score': 'E_epi_air_pct'})
+
+merged = pd.merge(merged, tpi[['CPI score 2023', 'Iso3']], left_on = ['Iso3'], right_on = ['Iso3'], how = 'left')
+merged = merged.rename(columns={'CPI score 2023': 'G_cpi'})
 
 ESG_indicators = merged
 
 del merged, c_iso_unique
-del combined_df, commodity_data, fao_agri, fao_tree, fao_tree_iso, gsi, gsi_iso, ilo_childlabour, ilo_childlabour_iso, tpi
-
-
+del combined_df, commodity_data, fao_agri, fao_tree, fao_tree_iso, gsi, gsi_iso, ilo_childlabour, ilo_childlabour_iso, tpi, ilo_fat, ilo_fat_iso
 
 #------------------------------------------------------------------------------
 # continue analyses
 #------------------------------------------------------------------------------
 
-#available dataframes
+# available dataframes for your own further analysis 
 # ESG_indicators = list of sourced ESG indicators per country ISO code
 # commodity_data_country = sources of each commodity, including country ISO code
 # fao_agri_iso = source of each agriculture material, including country ISO code
+
+# potential next steps: 1. determine a scoring framework for the ESG indicators; 2. connect commodities and agri's to further sources, and; 3. determine rollop of individual material ESG indicators to product level
